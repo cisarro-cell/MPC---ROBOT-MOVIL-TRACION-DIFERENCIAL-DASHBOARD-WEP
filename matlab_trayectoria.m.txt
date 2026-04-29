@@ -1,0 +1,105 @@
+clc; clear; close all;
+
+%% =========================
+% TRAYECTORIA (MARIPOSA)
+%% =========================
+theta = 0:0.01:12*pi;
+r = exp(sin(theta)) - 2*cos(4*theta) + sin((2*theta - pi)/24).^5;
+
+x_ref = r .* cos(theta);
+y_ref = r .* sin(theta);
+
+Nref = length(x_ref);
+
+%% =========================
+% PARÁMETROS
+%% =========================
+dt = 0.01;
+T = 100;
+steps = T/dt;
+
+x = zeros(1,steps);
+y = zeros(1,steps);
+phi = zeros(1,steps);
+
+v = 1.2;
+k = 3;
+L = 0.19;
+
+look_ahead = 25;
+
+%% COSTO
+J = 0;
+
+%% =========================
+% SIMULACIÓN
+%% =========================
+for i = 1:steps-1
+    
+    % Punto más cercano
+    dist = sqrt((x_ref - x(i)).^2 + (y_ref - y(i)).^2);
+    [~, idx] = min(dist);
+    
+    %  LOOK-AHEAD CÍCLICO
+    idx_la = mod(idx + look_ahead - 1, Nref) + 1;
+    
+    %  DIRECCIÓN CÍCLICA
+    idx2 = mod(idx, Nref) + 1;
+    
+    % Punto objetivo
+    x_target = x_ref(idx_la);
+    y_target = y_ref(idx_la);
+    
+    % Dirección de la trayectoria
+    dx = x_ref(idx2) - x_ref(idx);
+    dy = y_ref(idx2) - y_ref(idx);
+    
+    phi_ref = atan2(dy, dx);
+    
+    % Error angular
+    theta_e = wrapToPi(phi_ref - phi(i));
+    
+    % Error lateral (cross-track)
+    dx_e = x(i) - x_ref(idx);
+    dy_e = y(i) - y_ref(idx);
+    
+    e_d = -sin(phi_ref)*dx_e + cos(phi_ref)*dy_e;
+    
+    % Control Stanley
+    delta = theta_e + atan2(k * e_d, v);
+    
+    % Modelo tipo bicicleta
+    x(i+1) = x(i) + v*cos(phi(i))*dt;
+    y(i+1) = y(i) + v*sin(phi(i))*dt;
+    phi(i+1) = phi(i) + (v/L)*tan(delta)*dt;
+    
+    % Función de costo
+    J = J + (e_d^2 + theta_e^2)*dt;
+end
+
+%% =========================
+% RESULTADOS
+%% =========================
+figure;
+plot(x_ref, y_ref, 'm--','LineWidth',1.5); hold on;
+plot(x, y, 'b','LineWidth',2);
+legend('Referencia','Autito');
+title(['Seguimiento estable (cíclico) | J = ', num2str(J)]);
+grid on;
+axis equal;
+
+%% =========================
+% ANIMACIÓN
+%% =========================
+figure;
+for k = 1:50:steps
+    plot(x_ref, y_ref, 'm--'); hold on;
+    plot(x(1:k), y(1:k), 'b','LineWidth',2);
+    plot(x(k), y(k), 'ro','MarkerFaceColor','r');
+    
+    title('Seguimiento continuo (sin fuga)');
+    grid on;
+    axis equal;
+    drawnow;
+    hold off;
+end
